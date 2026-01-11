@@ -5,6 +5,32 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.0] - 2026-01-11
+
+### Added
+
+- 每日评论功能 (`src/comment.py`)
+  - 自动在随机漫画下发表评论
+  - 避免重复评论同一漫画
+  - 完成后自动领取积分
+- 每日阅读功能 (`src/watch.py`)
+  - 自动阅读漫画12分钟
+  - 智能跳过无效/付费章节
+  - 自动翻页和翻章
+  - 完成后自动领取积分
+- 共享工具模块 (`src/utils.py`)
+  - Cookie 解析和 localStorage 设置
+  - 浏览器上下文创建
+  - 积分领取功能
+- 独立的 GitHub Actions workflows
+  - `comment.yml` - 每日评论（北京时间 9:30）
+  - `watch.yml` - 每日阅读（北京时间 10:00）
+
+### Changed
+
+- 拆分原 `daily_tasks.py` 为独立模块
+- 优化跨域登录状态处理（localStorage 同步）
+
 ## [1.1.0] - 2026-01-10
 
 ### Added

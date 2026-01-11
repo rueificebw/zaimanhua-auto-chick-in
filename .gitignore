@@ -40,6 +40,28 @@ Thumbs.db
 # Project specific
 error_screenshot.png
 *.log
+commented_comics.txt
+
+# Test and debug scripts (may contain sensitive info)
+src/test_*.py
+src/explore_*.py
+src/check_*.py
+src/verify_*.py
+src/debug_*.py
+src/daily_tasks.py
+
+# Debug files
+*.png
+*.html
+*_text.txt
+*_detail.txt
+nul
+
+# Runtime data
+srccommented_comics.txt
+
+# Old workflow (replaced by separate workflows)
+.github/workflows/daily_tasks.yml
 
 # Claude Code
 .claude/
