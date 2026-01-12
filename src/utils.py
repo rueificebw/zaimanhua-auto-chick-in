@@ -1,6 +1,7 @@
 """共享工具函数"""
 import os
 import json
+import requests
 from urllib.parse import unquote
 from dotenv import load_dotenv
 
@@ -21,7 +22,10 @@ def extract_user_info_from_cookies(cookie_str):
             lginfo_decoded = unquote(lginfo_value)
             # 尝试解析为 JSON
             try:
-                user_info = json.loads(lginfo_decoded)
+                parsed = json.loads(lginfo_decoded)
+                # 确保解析结果是字典类型（防止 JSON 字符串字面量导致 .get() 失败）
+                if isinstance(parsed, dict):
+                    user_info = parsed
             except json.JSONDecodeError:
                 # 如果不是 JSON，尝试解析 key=value&key=value 格式
                 for pair in lginfo_decoded.split('&'):
@@ -132,17 +136,258 @@ def parse_cookies(cookie_str):
     return cookies
 
 
-def claim_rewards(page):
-    """在用户中心领取已完成任务的积分"""
+def get_task_list(token):
+    """通过 API 获取任务列表"""
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://i.zaimanhua.com/',
+        'Accept': 'application/json, text/plain, */*',
+    }
+
+    try:
+        resp = requests.get('https://i.zaimanhua.com/lpi/v1/task/list', headers=headers, timeout=10)
+        if resp.status_code == 200:
+            return resp.json()
+        else:
+            print(f"  获取任务列表失败: HTTP {resp.status_code}")
+            return None
+    except Exception as e:
+        print(f"  获取任务列表异常: {e}")
+        return None
+
+
+def extract_tasks_from_response(task_result):
+    """从任务 API 响应中提取所有任务列表
+
+    API 响应结构:
+    {
+        "errno": 0,
+        "data": {
+            "task": {
+                "dayTask": [...],      # 每日任务
+                "newUserTask": [...]   # 新用户任务
+            },
+            "userCurrency": {...}
+        }
+    }
+
+    任务状态值:
+    - status=1: 未完成
+    - status=3: 已完成（可领取或已领取）
+    """
+    if not task_result or task_result.get('errno') != 0:
+        return []
+
+    data = task_result.get('data', {})
+    if not isinstance(data, dict):
+        return []
+
+    # 尝试从嵌套结构中提取任务
+    task_data = data.get('task', {})
+    if isinstance(task_data, dict):
+        day_tasks = task_data.get('dayTask', [])
+        new_user_tasks = task_data.get('newUserTask', [])
+        if day_tasks or new_user_tasks:
+            all_tasks = (day_tasks or []) + (new_user_tasks or [])
+            # 过滤掉非字典类型的项目，防止 'str' object has no attribute 'get' 错误
+            return [t for t in all_tasks if isinstance(t, dict)]
+
+    # 回退：尝试其他可能的结构
+    if 'list' in data:
+        tasks = data.get('list', [])
+        return [t for t in tasks if isinstance(t, dict)]
+    if 'tasks' in data:
+        tasks = data.get('tasks', [])
+        return [t for t in tasks if isinstance(t, dict)]
+
+    return []
+
+
+def print_task_status(cookie_str, label=""):
+    """打印当前任务状态（用于调试）"""
+    token = None
+    user_info = extract_user_info_from_cookies(cookie_str)
+    # 确保 user_info 是字典类型
+    if isinstance(user_info, dict):
+        token = user_info.get('token')
+    if not token:
+        for item in cookie_str.split(';'):
+            item = item.strip()
+            if item.startswith('token='):
+                token = item[6:]
+                break
+
+    if not token:
+        print(f"  [{label}] 无法获取 token，跳过任务状态检查")
+        return
+
+    print(f"\n=== 任务状态 {label} ===")
+    task_result = get_task_list(token)
+
+    if task_result:
+        print(f"  API 响应: errno={task_result.get('errno')}")
+        if task_result.get('errno') == 0:
+            tasks = extract_tasks_from_response(task_result)
+
+            if tasks:
+                print(f"  任务数量: {len(tasks)}")
+                for task in tasks:
+                    task_id = task.get('id') or task.get('taskId')
+                    task_name = task.get('title') or task.get('name') or task.get('taskName', '未知')
+                    task_desc = task.get('desc', '')
+                    status = task.get('status', '?')
+
+                    # 状态说明: 1=未完成, 3=已完成
+                    status_desc = {1: '未完成', 2: '进行中', 3: '已完成'}.get(status, f'未知({status})')
+
+                    # 获取奖励信息
+                    currency = task.get('currency', {})
+                    credits = currency.get('credits', 0) if isinstance(currency, dict) else 0
+
+                    print(f"    - [{task_id}] {task_name}: {status_desc}")
+                    if task_desc:
+                        print(f"        描述: {task_desc}")
+                    if credits:
+                        print(f"        奖励: {credits} 积分")
+            else:
+                data = task_result.get('data', {})
+                print(f"  原始数据: {json.dumps(data, ensure_ascii=False)[:500]}")
+        else:
+            print(f"  API 错误: {task_result.get('errmsg', '未知错误')}")
+    else:
+        print("  无法获取任务列表")
+
+
+def claim_task_reward(token, task_id):
+    """通过 API 领取单个任务奖励"""
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://i.zaimanhua.com/',
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/json',
+    }
+
+    # 尝试多种可能的领取 API
+    claim_urls = [
+        f'https://i.zaimanhua.com/lpi/v1/task/receive?taskId={task_id}',
+        f'https://i.zaimanhua.com/lpi/v1/task/claim?taskId={task_id}',
+        f'https://i.zaimanhua.com/lpi/v1/task/get_reward?taskId={task_id}',
+    ]
+
+    for url in claim_urls:
+        try:
+            # 尝试 POST 请求
+            resp = requests.post(url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                result = resp.json()
+                if result.get('errno') == 0 or result.get('code') == 0:
+                    return True, result
+                # 如果接口返回错误但是是"已领取"类型的错误，也算成功
+                errmsg = result.get('errmsg', '') or result.get('message', '')
+                if '已领取' in errmsg or '已完成' in errmsg:
+                    return True, result
+
+            # 尝试 GET 请求
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                result = resp.json()
+                if result.get('errno') == 0 or result.get('code') == 0:
+                    return True, result
+                errmsg = result.get('errmsg', '') or result.get('message', '')
+                if '已领取' in errmsg or '已完成' in errmsg:
+                    return True, result
+        except Exception as e:
+            continue
+
+    return False, None
+
+
+def claim_rewards(page, cookie_str=None):
+    """在用户中心领取已完成任务的积分
+
+    优先使用 API 方式领取，如果失败则回退到 UI 方式
+
+    任务状态值:
+    - status=1: 未完成
+    - status=3: 已完成（可领取）
+    """
     print("\n=== 领取积分任务 ===")
+
+    # 尝试从 cookie_str 获取 token
+    token = None
+    if cookie_str:
+        user_info = extract_user_info_from_cookies(cookie_str)
+        # 确保 user_info 是字典类型
+        if isinstance(user_info, dict):
+            token = user_info.get('token')
+        if not token:
+            for item in cookie_str.split(';'):
+                item = item.strip()
+                if item.startswith('token='):
+                    token = item[6:]
+                    break
+
+    # 如果有 token，尝试 API 方式
+    if token:
+        print("尝试通过 API 领取奖励...")
+        task_result = get_task_list(token)
+
+        if task_result and task_result.get('errno') == 0:
+            tasks = extract_tasks_from_response(task_result)
+
+            claimed_count = 0
+            claimable_count = 0
+
+            for task in tasks:
+                task_id = task.get('id') or task.get('taskId')
+                task_name = task.get('title') or task.get('name') or task.get('taskName', '未知任务')
+                status = task.get('status', 0)
+
+                # 状态说明: status=3 表示已完成可领取
+                # 注意: 这里的逻辑可能需要根据实际情况调整
+                # 目前假设 status=3 的任务可以尝试领取
+                if status == 3:
+                    claimable_count += 1
+                    print(f"  发现已完成任务: {task_name} (ID: {task_id}, status={status})")
+
+                    if task_id:
+                        success, result = claim_task_reward(token, task_id)
+                        if success:
+                            print(f"    ✓ 领取成功")
+                            claimed_count += 1
+                        else:
+                            print(f"    ✗ 领取失败或已领取")
+                elif status == 1:
+                    print(f"  任务未完成: {task_name} (ID: {task_id}, status={status})")
+
+            if claimable_count == 0:
+                print("没有可领取的奖励（没有已完成的任务）")
+            else:
+                print(f"尝试领取 {claimable_count} 个任务，成功 {claimed_count} 个")
+
+            return True  # API 调用成功就返回 True
+
+    # 回退到 UI 方式
+    print("回退到 UI 方式领取...")
     try:
         # 访问用户中心
         print("访问用户中心...")
         page.goto('https://i.zaimanhua.com/', wait_until='domcontentloaded')
         page.wait_for_timeout(5000)
 
-        # 查找所有可领取的按钮
-        claim_buttons = page.query_selector_all(".okBtn")
+        # 查找所有可领取的按钮（尝试多种选择器）
+        selectors = [".okBtn", ".claim-btn", ".receive-btn", "[class*='领取']", "button:has-text('领取')"]
+        claim_buttons = []
+        for selector in selectors:
+            try:
+                buttons = page.query_selector_all(selector)
+                if buttons:
+                    claim_buttons.extend(buttons)
+            except:
+                pass
+
         claimed_count = 0
 
         if claim_buttons:
