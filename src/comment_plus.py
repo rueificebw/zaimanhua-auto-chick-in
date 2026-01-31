@@ -22,6 +22,7 @@ COMMENTED_COMICS_FILE = "commented_comics.txt"
 COMMENTS = [
     "好",
     "👍",
+    "马萨卡",
     "好看",
     "₍˄·͈༝·͈˄*₎◞ ̑̑",
 ]
@@ -355,4 +356,5 @@ def main():
 
 if __name__ == '__main__':
     success = main()
+
     exit(0 if success else 1)
