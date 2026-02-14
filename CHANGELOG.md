@@ -19,6 +19,7 @@
 - 非零退出码支持 (`src/auto_read.py`, `src/lottery.py`)
   - Cookie 失效或任务失败时以 exit code 1 退出
   - 触发 GitHub Actions 内置失败通知邮件
+- README 添加 Cookie 过期更新详细步骤
 
 ### Changed
 

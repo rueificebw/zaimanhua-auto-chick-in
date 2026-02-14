@@ -140,10 +140,52 @@
 
 ## 注意事项
 
-- **Cookie 有效期**：Cookie 可能会过期，失效时 workflow 会自动失败并触发邮件通知，届时请及时更新
+- **Cookie 有效期**：Cookie 可能会过期，失效时 workflow 会自动失败并触发邮件通知，届时请按下方步骤更新
 - **GitHub Actions 限制**：免费账户每月 2000 分钟，阅读任务约需 15 分钟/次
 - **GitHub 通知设置**：确保在 GitHub Settings > Notifications 中开启 Actions 失败通知
 - **隐私安全**：Cookie 存储在 GitHub Secrets 中，不会公开显示
+
+## Cookie 过期更新
+
+当 Cookie 失效时，workflow 运行日志会显示如下错误：
+
+```
+[ERROR] Cookie 无效: API 返回错误: 用户未登录
+请更新 默认账号 (张三) 的 Cookie
+```
+
+同时 GitHub Actions 会因非零退出码触发失败通知邮件。收到通知后，按以下步骤更新：
+
+### 1. 重新获取 Cookie
+
+1. 在浏览器中打开 https://i.zaimanhua.com/ 并**重新登录**（或确认已登录）
+2. 按 **F12** 打开开发者工具
+3. 切换到 **Console（控制台）** 标签
+4. 输入以下命令并回车：
+   ```javascript
+   document.cookie
+   ```
+5. 复制输出的整个字符串（去掉首尾引号）
+
+### 2. 更新 GitHub Secret
+
+1. 进入你 Fork 的仓库
+2. 点击 **Settings** → **Secrets and variables** → **Actions**
+3. 找到需要更新的 Secret（根据日志中提示的账号名称对应）：
+   - `ZAIMANHUA_COOKIE` — 默认账号
+   - `ZAIMANHUA_COOKIE_1` — 账号 1
+   - 以此类推...
+4. 点击该 Secret 右侧的 **编辑（铅笔图标）**
+5. 在 Value 中粘贴新的 Cookie 字符串
+6. 点击 **Update secret**
+
+### 3. 验证更新
+
+1. 进入 **Actions** 标签
+2. 选择任意 workflow，点击 **Run workflow** 手动触发
+3. 查看运行日志，确认不再出现 Cookie 无效的错误
+
+> **提示**：日志中会显示账号的真实用户名（如 `默认账号 (张三)`），方便快速定位需要更新的账号。
 
 ## 技术栈
 
