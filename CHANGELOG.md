@@ -5,6 +5,61 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.8.0] - 2026-02-15
+
+### Added
+
+- 签到后自动领取"VIP福利"每日积分 (`src/checkin.py`)
+  - 新增 `claim_vip_reward()` 函数，通过任务列表 API 检查并领取 VIP福利 (任务 ID=16，奖励 2 积分)
+  - 非 VIP 账号自动跳过，不影响签到流程
+  - 签到主流程执行顺序：签到 → 领取签到积分 → 领取VIP福利
+
+## [1.7.0] - 2026-02-15
+
+### Added
+
+- 2026 马年春节活动自动化 (`src/2026new_year.py`)
+  - 活动地址：https://activity.zaimanhua.com/newYear/
+  - 活动时间：2026.2.15 - 2026.2.23，每天 10:00-24:00
+  - 自动完成分享任务（API）
+  - 自动完成观看漫画任务（Playwright）
+  - 每次执行发送一条随机祝福弹幕获取抽奖机会
+  - 自动用完所有可用抽奖次数
+  - 20 条随机祝福语，避免重复
+- 新年活动 workflow (`2026new_year.yml`)
+  - 北京时间 8:00-23:00，每 15 分钟触发一次
+  - 支持手动触发
+
+### Technical Notes
+
+- API Base URL: `https://activity.zaimanhua.com`
+- 签名: `sign = MD5(channel + timestamp + "z&m$h*_159753twt")`
+- 端点: `draw_load`(状态)、`share`(分享)、`add_comment`(祝福)、`drawing`(抽奖)
+- 每次祝福可获得 1 次抽奖机会，通过高频 cron 实现多次祝福
+
+## [1.6.0] - 2026-02-11
+
+### Added
+
+- 日志显示账号真实用户名 (`src/utils.py`, `src/checkin.py`)
+  - 新增 `_make_account_label()` 从 Cookie 提取 nickname/username
+  - 日志标签格式：`默认账号 (张三)`、`账号 1 (李四)`
+- Cookie 失效检测 (`src/utils.py`)
+  - 新增 `validate_cookie()` 通过任务列表 API 验证 Cookie 有效性
+  - 所有脚本在执行任务前统一验证 Cookie
+  - Cookie 无效时输出明确错误信息并跳过该账号
+- 非零退出码支持 (`src/auto_read.py`, `src/lottery.py`)
+  - Cookie 失效或任务失败时以 exit code 1 退出
+  - 触发 GitHub Actions 内置失败通知邮件
+- README 添加 Cookie 过期更新详细步骤
+
+### Changed
+
+- `src/checkin.py`: `get_all_cookies()` 标签加入用户名，`main()` 加入 Cookie 验证
+- `src/comment.py`: `main()` 加入 Cookie 验证
+- `src/auto_read.py`: `run_auto_read()` 加入 Cookie 验证，`__main__` 加入 exit code
+- `src/lottery.py`: `main()` 加入 Cookie 验证 + 返回值，`__main__` 加入 exit code
+
 ## [1.5.0] - 2026-01-18
 
 ### Added

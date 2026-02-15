@@ -8,6 +8,20 @@ from utils import extract_user_info_from_cookies, claim_task_reward, get_task_li
 MAX_RETRIES = 5
 PAGE_TIMEOUT = 60000  # 60秒
 CHECKIN_TASK_ID = 8  # "到此一游"签到任务
+VIP_TASK_ID = 16     # "VIP福利"每日领取任务
+
+
+def _make_account_label(default_label, cookie_str):
+    """从 Cookie 中提取用户名，生成带用户名的账号标签"""
+    try:
+        user_info = extract_user_info_from_cookies(cookie_str)
+        if isinstance(user_info, dict):
+            name = user_info.get('nickname') or user_info.get('username')
+            if name:
+                return f"{default_label} ({name})"
+    except Exception:
+        pass
+    return default_label
 
 
 def get_all_cookies():
@@ -19,14 +33,16 @@ def get_all_cookies():
     # 兼容单账号配置
     single = os.environ.get('ZAIMANHUA_COOKIE')
     if single:
-        cookies_list.append(('默认账号', single))
+        label = _make_account_label('默认账号', single)
+        cookies_list.append((label, single))
 
     # 支持多账号配置 ZAIMANHUA_COOKIE_1, _2, _3...
     i = 1
     while True:
         cookie = os.environ.get(f'ZAIMANHUA_COOKIE_{i}')
         if cookie:
-            cookies_list.append((f'账号 {i}', cookie))
+            label = _make_account_label(f'账号 {i}', cookie)
+            cookies_list.append((label, cookie))
             i += 1
         else:
             break
@@ -90,6 +106,51 @@ def claim_checkin_reward(cookie_str):
                 return False
 
     print(f"未找到签到任务 (ID={CHECKIN_TASK_ID})")
+    return False
+
+
+def claim_vip_reward(cookie_str):
+    """领取VIP福利的每日积分奖励"""
+    user_info = extract_user_info_from_cookies(cookie_str)
+    token = user_info.get('token') if isinstance(user_info, dict) else None
+
+    if not token:
+        print("无法获取 token，跳过VIP福利领取")
+        return False
+
+    # 获取任务列表，检查VIP福利任务状态
+    task_result = get_task_list(token)
+    if not task_result or task_result.get('errno') != 0:
+        print("获取任务列表失败")
+        return False
+
+    tasks = extract_tasks_from_response(task_result)
+    for task in tasks:
+        task_id = task.get('id') or task.get('taskId')
+        task_name = task.get('title') or task.get('name') or task.get('taskName', '未知')
+        status = task.get('status', 0)
+
+        if task_id == VIP_TASK_ID:
+            if status == 2:
+                print(f"发现可领取任务: {task_name} (ID: {task_id})")
+                success, result = claim_task_reward(token, task_id)
+                if success:
+                    print(f"  [OK] VIP福利领取成功！")
+                    return True
+                else:
+                    print(f"  [FAIL] VIP福利领取失败: {result}")
+                    return False
+            elif status == 3:
+                print(f"VIP福利已领取: {task_name}")
+                return True
+            elif status == 1:
+                print(f"VIP福利不可领取（非VIP或未满足条件）: {task_name}")
+                return False
+            else:
+                print(f"VIP福利状态未知: {task_name} (status={status})")
+                return False
+
+    print(f"未找到VIP福利任务 (ID={VIP_TASK_ID})，可能非VIP账号")
     return False
 
 
@@ -199,11 +260,25 @@ def main():
         print(f"\n{'='*40}")
         print(f"正在签到: {name}")
         print('='*40)
+
+        # 验证 Cookie 有效性
+        from utils import validate_cookie
+        is_valid, error_msg = validate_cookie(cookie_str)
+        if not is_valid:
+            print(f"[ERROR] Cookie 无效: {error_msg}")
+            print(f"请更新 {name} 的 Cookie")
+            all_success = False
+            continue
+
         success = checkin(cookie_str)
         if success:
             # 签到成功后领取积分
             print("\n--- 领取签到积分 ---")
             claim_checkin_reward(cookie_str)
+
+            # 领取VIP福利
+            print("\n--- 领取VIP福利 ---")
+            claim_vip_reward(cookie_str)
         else:
             all_success = False
 
