@@ -21,8 +21,8 @@ COMMENTED_COMICS_FILE = "commented_comics.txt"
 # 评论内容池 (个人自用)
 COMMENTS = [
     "(゜∀゜*)",
-    "_(:3 ⌒ﾞ)_",
-    "੭ᐕ)੭*⁾⁾",
+    "(⁠・⁠∀⁠・⁠)",
+    "(⁠ ⁠╹⁠▽⁠╹⁠ ⁠)",
     "(´・ω・｀)",
     "₍˄·͈༝·͈˄*₎◞ ̑̑",
     "(・ω・)",
@@ -363,6 +363,7 @@ if __name__ == '__main__':
     success = main()
 
     exit(0 if success else 1)
+
 
 
 
