@@ -1,10 +1,6 @@
 name: 4th Anniversary Activity
 
 on:
-  schedule:
-    # 北京时间 5:00-23:00 (UTC 21:00-15:00)，每 20 分钟触发
-    # 活动时间: 2026.1.16 - 2026.1.22
-    - cron: '0,20,40 0-15,21-23 * * *'
   workflow_dispatch:
 
 jobs:
